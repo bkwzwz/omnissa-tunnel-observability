@@ -7,6 +7,7 @@ services:
       - --web.enable-admin-api
       - --web.enable-lifecycle
       - --storage.tsdb.retention.time=7d
+      - --web.config.file=/etc/prometheus/web-config.yml
     container_name: prometheus
     image: prom/prometheus:v3.11.2
     env_file:
@@ -15,11 +16,13 @@ services:
       shared: null
     ports:
       - protocol: tcp
-        published: 9090
+        published: ${PROMETHEUS_PORT:-9090}
         target: 9090
     restart: always
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/web-config.yml:/etc/prometheus/web-config.yml:ro
+      - ./prometheus/certs/:/etc/prometheus/certs/:ro
   telegraf:
     build: ./telegraf
     container_name: telegraf
@@ -49,10 +52,12 @@ services:
       - grafana_plugins:/var/lib/grafana/plugins
       - ./grafana/provisioning/datasources/tunnel/:/etc/grafana/provisioning/datasources/:ro
       - ./grafana/provisioning/dashboard/:/opt/grafana/dashboards/:rw
+      - ./grafana/provisioning/dashboard/:/etc/grafana/provisioning/dashboards/:rw
       - ./grafana/provisioning/alerting/:/etc/grafana/provisioning/alerting/:rw
     restart: always
     env_file:
       - .env
+      - prometheus/generated.env
     networks:
       shared: null
   loki:

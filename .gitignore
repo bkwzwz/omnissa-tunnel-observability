@@ -1,0 +1,4 @@
+prometheus/generated.env
+prometheus/web-config.yml
+prometheus/certs/*
+!prometheus/certs/README.md

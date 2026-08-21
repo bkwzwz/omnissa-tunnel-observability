@@ -43,6 +43,11 @@ GRAFANA_USER=<GRAFANA USERNAME>
 GRAFANA_PASSWORD=<GRAFANA PASSWORD>
 GRAFANA_PLUGINS_ENABLED=true
 GRAFANA_PLUGINS=grafana-piechart-panel
+
+PROMETHEUS_PORT=9090
+PROMETHEUS_TLS_ENABLED=true
+PROMETHEUS_USER=<PROMETHEUS USERNAME>
+PROMETHEUS_PASSWORD=<PROMETHEUS PASSWORD>
 ```
 * Open [telegraf/snmp.conf](./telegraf/snmp.conf) and fill in the Tunnel Server IPs:
 ```
@@ -83,6 +88,48 @@ Tunnel Server sends logs via syslog to Grafana Alloy, which parses and forwards 
 * In UAG, enable SNMP following the guide [here](https://docs.omnissa.com/bundle/UnifiedAccessGatewayDeployandConfigureV2506/page/Systemconfiguration.html).
 * SNMP v2c is recommended.
 * Update `agents` in [telegraf/snmp.conf](./telegraf/snmp.conf) with the Tunnel Server IPs.
+
+### Configuration (for Prometheus Remote Write)
+
+Tunnel Server (vpnd/vpnreport) can push metrics directly to this stack's Prometheus via
+remote-write, using the `prometheus_*` KVPs on the Tunnel Server. Everything on the
+observability side is driven by [.env](./.env) -- no username/password/scheme is hardcoded.
+
+* `PROMETHEUS_PORT`: host port Prometheus is published on (Tunnel Server connects to this).
+* `PROMETHEUS_TLS_ENABLED`: `true` for HTTPS, `false` for plain HTTP.
+* `PROMETHEUS_USER` / `PROMETHEUS_PASSWORD`: Basic Auth credentials required for both
+  remote-write and the Grafana datasource.
+
+If `PROMETHEUS_TLS_ENABLED=true`, place the PFX certificate issued by your certificate team
+at `prometheus/certs/prometheus.pfx` before running `setup.sh tunall`. You will be prompted
+for the PFX password on the terminal (only when the PFX is new/changed) so the PEM cert/key
+pair can be extracted for Prometheus; the password itself is never written to disk.
+
+`setup.sh tunall` runs [prometheus/generate-config.sh](./prometheus/generate-config.sh) to turn
+these settings into `prometheus/web-config.yml` (TLS + bcrypt-hashed Basic Auth) before starting
+the containers, and Grafana's Prometheus datasource picks up the same scheme/credentials via
+Grafana's built-in `$__env{}` provisioning expansion.
+
+Configure the Tunnel Server to match, using the `prometheus_*` KVPs (server-only, self-hosted
+Basic Auth mode):
+```
+prometheus_enabled 1
+prometheus_server_type 2
+prometheus_server_remote_url https://<LINUX VM IP>:<PROMETHEUS_PORT>/api/v1/write
+prometheus_port <PROMETHEUS_PORT>
+prometheus_username <PROMETHEUS_USER>
+prometheus_password <PROMETHEUS_PASSWORD>
+```
+Use `http://` in `prometheus_server_remote_url` instead if `PROMETHEUS_TLS_ENABLED=false`.
+
+The default Grafana home dashboard (`TunnelStats.json`, provisioned automatically) only shows the
+SNMP-based Tunnel Stats view, so customers are not overwhelmed by Prometheus's raw field-level
+detail. A separate, much more detailed dashboard covering every `vpnserver_*` Prometheus metric,
+[Tunnel Server - Prometheus Remote Write](./grafana/provisioning/dashboard/Tunnel%20Server%20-%20Prometheus%20Remote%20Write.json),
+is **also provisioned automatically** (same mechanism as `TunnelStats.json`) and appears alongside
+the Home dashboard in Grafana's dashboard list -- no manual import needed. That file under
+`grafana/provisioning/dashboard/` is the single source of truth (it's what Grafana actually loads);
+there is no separate exported copy to keep in sync.
 
 ### Tests
 

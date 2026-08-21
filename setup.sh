@@ -25,6 +25,7 @@ fi
 
 case "$1" in
   "tunall")
+       ./prometheus/generate-config.sh
        docker compose -f docker-compose.yml up --build --force-recreate -d; shift;;
   "clean")
        docker compose down --remove-orphans; shift;;
